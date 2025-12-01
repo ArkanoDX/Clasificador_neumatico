@@ -7,7 +7,7 @@ from PyQt5.QtGui import QImage
 
 
 # ==========================================
-# 1. WORKER DE VISIÓN (LÓGICA DE BANDA TRANSPORTADORA)
+# 1. WORKER DE VISIÓN
 # ==========================================
 class VisionWorker(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
@@ -18,26 +18,32 @@ class VisionWorker(QThread):
         self.camera_index = camera_index
         self.is_running = True
 
-        # --- CALIBRACIÓN DE COLOR (HSV) ---
-        # Ajusta esto para que solo vea tus piezas y no el fondo
-        self.lower_blue = np.array([100, 150, 50])
-        self.upper_blue = np.array([140, 255, 255])
-
-        # --- CONFIGURACIÓN DE LA BANDA ---
-        # Posición de la línea de disparo (Eje X, pixeles)
-        # Ajusta esto para que coincida con el momento en que la pieza pasa frente a los sensores/pistones
+        # Posición de la línea roja
         self.trigger_line_x = 320
-        self.trigger_offset = 20  # Margen de error (+/- 20 px)
+        self.trigger_offset = 20
+
+        # DICCIONARIO DE COLORES
+        self.colors = {
+            "AZUL": (
+                np.array([100, 150, 50]),
+                np.array([140, 255, 255])
+            ),
+            "VERDE": (
+                np.array([40, 100, 100]),
+                np.array([90, 255, 255])
+            ),
+            "NARANJA": (
+                # Bajamos S y V de 150 a 80 para aceptar naranjas con sombra o brillo
+                # Ampliamos el Hue de 5-25 a 0-28 para agarrar tonos rojizos y amarillentos
+                np.array([0, 186, 118]),
+                np.array([28, 255, 255])
+            )
+        }
 
     def run(self):
-        print(f"--> Iniciando Webcam (Índice {self.camera_index})...")
         cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
 
-        if not cap.isOpened():
-            print(f"❌ ERROR: No se detectó cámara en el índice {self.camera_index}.")
-            return
-
-        print("✅ CÁMARA LISTA. Alinea la línea roja con tus actuadores.")
+        # ... (chequeo de cámara) ...
 
         last_trigger_time = 0
 
@@ -46,65 +52,60 @@ class VisionWorker(QThread):
             if ret:
                 frame = cv2.resize(frame, (640, 480))
 
-                # 1. DIBUJAR LÍNEA DE DISPARO (Referencia visual)
-                # Cuando la pieza toque esta línea roja, se activará el pistón
+                # Línea de disparo
                 cv2.line(frame, (self.trigger_line_x, 0), (self.trigger_line_x, 480), (0, 0, 255), 2)
 
-                # 2. PROCESAMIENTO DE IMAGEN
                 hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                mask = cv2.inRange(hsv, self.lower_blue, self.upper_blue)
-                # Limpiar ruido
-                mask = cv2.erode(mask, None, iterations=2)
-                mask = cv2.dilate(mask, None, iterations=2)
 
-                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for color_name, (lower, upper) in self.colors.items():
+                    mask = cv2.inRange(hsv, lower, upper)
+                    mask = cv2.erode(mask, None, iterations=2)
+                    mask = cv2.dilate(mask, None, iterations=2)
 
-                for cnt in contours:
-                    area = cv2.contourArea(cnt)
+                    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-                    if area > 1500:  # Ignorar ruido pequeño
-                        x, y, w, h = cv2.boundingRect(cnt)
+                    for cnt in contours:
+                        area = cv2.contourArea(cnt)
+                        if area > 1500:
+                            x, y, w, h = cv2.boundingRect(cnt)
+                            cx = x + w // 2
 
-                        # Calcular el CENTRO del objeto (Centroide)
-                        cx = x + w // 2
-                        cy = y + h // 2
+                            # Dibujar
+                            box_color = (0, 255, 0)
+                            if color_name == "AZUL": box_color = (255, 0, 0)
+                            if color_name == "NARANJA": box_color = (0, 165, 255)
 
-                        # Dibujar caja y centro
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                        cv2.circle(frame, (cx, cy), 5, (255, 0, 0), -1)
+                            cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
+                            cv2.putText(frame, color_name, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
 
-                        # --- LÓGICA DE DISPARO ---
-                        # Si el centro del objeto cruza la línea de disparo (con un margen pequeño)
-                        # Y ha pasado al menos 1 segundo desde la última activación (para no repetir)
-                        if (
-                                self.trigger_line_x - self.trigger_offset < cx < self.trigger_line_x + self.trigger_offset) and \
-                                (time.time() - last_trigger_time > 1.0):
+                            # --- LÓGICA DE DISPARO POR COLOR ---
+                            # Si cruza la línea...
+                            if (
+                                    self.trigger_line_x - self.trigger_offset < cx < self.trigger_line_x + self.trigger_offset) and \
+                                    (time.time() - last_trigger_time > 1.5):
 
-                            # CLASIFICACIÓN POR TAMAÑO (Altura en px)
-                            zone = 0
-                            if h < 80:
-                                zone = 1  # Pequeña
-                            elif h < 150:
-                                zone = 2  # Mediana
-                            else:
-                                zone = 3  # Grande
+                                # AQUI ESTABA EL ERROR ANTES (usaba 'h')
+                                # AHORA USAMOS EL COLOR PARA LA ZONA
+                                zone = 0
 
-                            print(f"⚡ DISPARO! Objeto en zona {zone} (Altura: {h}px)")
+                                if color_name == "VERDE":
+                                    zone = 1  # Activa Relé 1
+                                elif color_name == "NARANJA":
+                                    zone = 2  # Activa Relé 2
+                                elif color_name == "AZUL":
+                                    zone = 3  # No hace nada (pasa al final)
 
-                            # Enviar señal
-                            self.detected_signal.emit("AZUL", h, zone)
-                            last_trigger_time = time.time()
+                                print(f"⚡ DISPARO: {color_name} -> Zona {zone}")
 
-                            # Efecto visual: Cambiar línea a Verde momentáneamente
-                            cv2.line(frame, (self.trigger_line_x, 0), (self.trigger_line_x, 480), (0, 255, 0), 5)
+                                self.detected_signal.emit(color_name, h, zone)
+                                last_trigger_time = time.time()
+                                cv2.line(frame, (self.trigger_line_x, 0), (self.trigger_line_x, 480), (0, 255, 0), 5)
 
                 # Enviar a GUI
                 rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_image.shape
                 qt_img = QImage(rgb_image.data, w, h, ch * w, QImage.Format_RGB888)
                 self.change_pixmap_signal.emit(qt_img)
-            else:
-                pass
 
         cap.release()
 
@@ -114,7 +115,7 @@ class VisionWorker(QThread):
 
 
 # ==========================================
-# 2. WORKER SERIAL (Sin cambios, solo confirmando)
+# 2. WORKER SERIAL (CONTROLADOR)
 # ==========================================
 class SerialController(QThread):
     def __init__(self, port, baudrate=115200):
@@ -126,10 +127,10 @@ class SerialController(QThread):
     def run(self):
         try:
             self.serial_conn = serial.Serial(self.port, self.baudrate, timeout=1)
-            print(f"✅ Conectado al ESP32 en {self.port}")
+            print(f"✅ Arduino conectado en {self.port}")
             time.sleep(2)
         except Exception as e:
-            print(f"❌ Error conectando al ESP32: {e}")
+            print(f"❌ Error Arduino: {e}")
 
     def send_command(self, cmd):
         if self.serial_conn and self.serial_conn.is_open:

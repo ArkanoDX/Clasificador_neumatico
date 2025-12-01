@@ -32,9 +32,13 @@ class MonitorIndustrial(QMainWindow):
         self.setGeometry(100, 100, 1150, 700)
         self.setStyleSheet("background-color: #3b4252;")
 
-        # Datos para gráfica
+        # --- DATOS PARA GRÁFICA (POR COLOR) ---
         self.x_data = [0]
-        self.y_zone1, self.y_zone2, self.y_zone3 = [0], [0], [0]
+        self.y_azul = [0]
+        self.y_verde = [0]
+        self.y_naranja = [0]
+
+        # Contadores [Azul, Verde, Naranja]
         self.counters = [0, 0, 0]
         self.event_index = 0
 
@@ -96,7 +100,7 @@ class MonitorIndustrial(QMainWindow):
         self.frame_graph.setStyleSheet(panel_style)
         graph_layout = QVBoxLayout(self.frame_graph)
         self.canvas = MplCanvas(self)
-        graph_layout.addWidget(QLabel("ESTADÍSTICAS"))
+        graph_layout.addWidget(QLabel("CONTEO POR COLOR"))
         graph_layout.addWidget(self.canvas)
 
         # Tabla
@@ -114,6 +118,13 @@ class MonitorIndustrial(QMainWindow):
     def init_graph(self):
         self.canvas.axes.clear()
         self.canvas.axes.grid(True, linestyle='--')
+
+        # Líneas iniciales
+        self.canvas.axes.plot([], [], 'o-', label='Azules', color='tab:blue')
+        self.canvas.axes.plot([], [], '^-', label='Verdes', color='tab:green')
+        self.canvas.axes.plot([], [], 's-', label='Naranjas', color='tab:orange')
+
+        self.canvas.axes.legend()
         self.canvas.draw()
 
     # SLOT: Actualizar imagen de video
@@ -122,43 +133,49 @@ class MonitorIndustrial(QMainWindow):
 
     # SLOT: Actualizar datos (Llamado desde main)
     def update_data(self, hora, color, altura, zona):
-        # Tabla
+        # 1. Actualizar Tabla
         self.table.insertRow(0)
         self.table.setItem(0, 0, QTableWidgetItem(hora))
         self.table.setItem(0, 1, QTableWidgetItem(color))
         self.table.setItem(0, 2, QTableWidgetItem(str(altura)))
         self.table.setItem(0, 3, QTableWidgetItem(str(zona)))
 
-        # Gráfica
+        # 2. Actualizar Gráfica (AHORA POR COLOR)
         try:
-            z = int(zona)
             self.event_index += 1
             self.x_data.append(self.event_index)
-            if z == 1:
+
+            # Sumar al contador correspondiente según el TEXTO del color
+            if color == "AZUL":
                 self.counters[0] += 1
-            elif z == 2:
+            elif color == "VERDE":
                 self.counters[1] += 1
-            elif z == 3:
+            elif color == "NARANJA":
                 self.counters[2] += 1
 
-            self.y_zone1.append(self.counters[0])
-            self.y_zone2.append(self.counters[1])
-            self.y_zone3.append(self.counters[2])
+            # Guardar historial
+            self.y_azul.append(self.counters[0])
+            self.y_verde.append(self.counters[1])
+            self.y_naranja.append(self.counters[2])
 
-            # Limitar a últimos 20
+            # Limitar a los últimos 20 eventos para que la gráfica se mueva
             if len(self.x_data) > 20:
                 self.x_data = self.x_data[-20:]
-                self.y_zone1 = self.y_zone1[-20:]
-                self.y_zone2 = self.y_zone2[-20:]
-                self.y_zone3 = self.y_zone3[-20:]
+                self.y_azul = self.y_azul[-20:]
+                self.y_verde = self.y_verde[-20:]
+                self.y_naranja = self.y_naranja[-20:]
 
+            # Redibujar
             self.canvas.axes.clear()
             self.canvas.axes.grid(True, linestyle='--')
-            self.canvas.axes.set_title("Conteo por Zonas")
-            self.canvas.axes.plot(self.x_data, self.y_zone1, 'o-', label='Z1', color='blue')
-            self.canvas.axes.plot(self.x_data, self.y_zone2, '^-', label='Z2', color='green')
-            self.canvas.axes.plot(self.x_data, self.y_zone3, 's-', label='Z3', color='red')
-            self.canvas.axes.legend()
+            self.canvas.axes.set_title("Conteo de Piezas")
+
+            self.canvas.axes.plot(self.x_data, self.y_azul, 'o-', label='Azules', color='tab:blue')
+            self.canvas.axes.plot(self.x_data, self.y_verde, '^-', label='Verdes', color='tab:green')
+            self.canvas.axes.plot(self.x_data, self.y_naranja, 's-', label='Naranjas', color='tab:orange')
+
+            self.canvas.axes.legend(loc='upper left')
             self.canvas.draw()
-        except Exception:
-            pass
+
+        except Exception as e:
+            print(f"Error gráfica: {e}")

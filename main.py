@@ -7,8 +7,8 @@ from workers import VisionWorker, SerialController
 # ==========================================
 # CONFIGURACIÓN DEL SISTEMA
 # ==========================================
-CAMERA_INDEX = 0  # Prueba con 0 o 1 si no sale tu cámara USB
-PUERTO_ESP_CONTROL = 'COM5'  # <--- ¡Revisa en el Administrador de Dispositivos!
+CAMERA_INDEX = 1  # Prueba con 0 o 1 si no sale tu cámara USB
+PUERTO_ESP_CONTROL = 'COM9'  # <--- ¡Revisa en el Administrador de Dispositivos!
 
 
 class MainApp:
