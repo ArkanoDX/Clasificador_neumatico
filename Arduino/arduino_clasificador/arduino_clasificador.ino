@@ -2,9 +2,9 @@
 
 // ===== PINES =====
 #define MOTOR_IN1 5
-#define MOTOR_IN2 6
+#define MOTOR_IN2 6   
 #define RELAY_VERDE   12  // Vamos a usar este para la prueba
-#define RELAY_NARANJA 4
+#define RELAY_NARANJA 4   
 
 #define BTN_START 7
 #define BTN_STOP  8
@@ -28,28 +28,28 @@ void motorForward() {
 
 void apagarReles() {
   // LÓGICA INVERSA: HIGH = APAGADO
-  digitalWrite(RELAY_VERDE, HIGH);
-  digitalWrite(RELAY_NARANJA, HIGH);
+  digitalWrite(RELAY_VERDE, HIGH); 
+  digitalWrite(RELAY_NARANJA, HIGH); 
 }
 
 void disparoPrueba() {
   // Solo disparamos si el sistema está activo (O quita esta línea si quieres probar sin motor)
-  // if (!systemEnabled) return;
+  // if (!systemEnabled) return; 
 
   Serial.println("¡SEÑAL RECIBIDA! Disparando actuador...");
 
   // 1. Asegurar apagado
   apagarReles();
-
+  
   // 2. ACTIVAR EL RELÉ 1 (Pin 12)
   // LOW = ENCENDIDO
-  digitalWrite(RELAY_VERDE, LOW);
-
+  digitalWrite(RELAY_VERDE, LOW); 
+  
   // 3. Esperar 1 segundo
-  delay(1000);
-
+  delay(1000); 
+  
   // 4. Apagar
-  apagarReles();
+  apagarReles(); 
   Serial.println("Disparo terminado.");
 }
 
@@ -68,8 +68,8 @@ void detenerSistema() {
 //           SETUP
 // =====================================================
 void setup() {
-  Serial.begin(115200);
-
+  Serial.begin(115200); 
+  
   pinMode(MOTOR_IN1, OUTPUT);
   pinMode(MOTOR_IN2, OUTPUT);
   pinMode(RELAY_VERDE, OUTPUT);
@@ -80,7 +80,7 @@ void setup() {
   // Estado inicial: Todo apagado (HIGH)
   apagarReles();
   motorStop();
-
+  
   Serial.println("MODO PRUEBA LISTO: Cualquier detección activa el pistón.");
 }
 
@@ -91,12 +91,12 @@ void loop() {
   // 1. BOTONES
   if (digitalRead(BTN_STOP) == LOW) {
     detenerSistema();
-    delay(300);
+    delay(300); 
   }
 
   if (digitalRead(BTN_START) == LOW) {
     iniciarSistema();
-    delay(300);
+    delay(300); 
   }
 
   // 2. ESCUCHAR A PYTHON
