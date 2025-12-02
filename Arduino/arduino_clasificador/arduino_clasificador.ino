@@ -3,114 +3,107 @@
 // ===== PINES =====
 #define MOTOR_IN1 5
 #define MOTOR_IN2 6   
-#define RELAY_VERDE   12  // Vamos a usar este para la prueba
-#define RELAY_NARANJA 4   
+
+// Asignación según tu hardware
+#define ACTUADOR_1 4    // Relay Naranja (Para piezas Naranjas)
+#define ACTUADOR_2 12   // Relay Verde (Para piezas Verdes)
 
 #define BTN_START 7
 #define BTN_STOP  8
 
-// ===== VARIABLES =====
 bool systemEnabled = false;
 
 // =====================================================
-//           FUNCIONES
+//           CONFIGURACIÓN DE TIEMPOS (AJUSTAR AQUÍ)
 // =====================================================
+// Tiempo que tarda la banda en llevar la pieza desde la cámara hasta el actuador
+// AJUSTA ESTOS VALORES EN MILISEGUNDOS SEGÚN LA VELOCIDAD DE TU BANDA
+const int TIEMPO_VIAJE_ACTUADOR_1 = 500;  // Ejemplo: 0.5 seg para llegar al primer pistón
+const int TIEMPO_VIAJE_ACTUADOR_2 = 1500; // Ejemplo: 1.5 seg para llegar al segundo pistón
 
-void motorStop() {
-  digitalWrite(MOTOR_IN1, LOW);
-  digitalWrite(MOTOR_IN2, LOW);
-}
-
-void motorForward() {
-  digitalWrite(MOTOR_IN1, HIGH);
-  digitalWrite(MOTOR_IN2, LOW);
-}
+// Tiempo que el pistón se queda afuera empujando
+const int TIEMPO_EMPUJE = 500; 
 
 void apagarReles() {
-  // LÓGICA INVERSA: HIGH = APAGADO
-  digitalWrite(RELAY_VERDE, HIGH); 
-  digitalWrite(RELAY_NARANJA, HIGH); 
+  // Lógica Inversa: HIGH = APAGADO
+  digitalWrite(ACTUADOR_1, HIGH); 
+  digitalWrite(ACTUADOR_2, HIGH);
 }
 
-void disparoPrueba() {
-  // Solo disparamos si el sistema está activo (O quita esta línea si quieres probar sin motor)
-  // if (!systemEnabled) return; 
+void activarPiston(int pinRelay, int tiempoEspera) {
+  if (!systemEnabled) return; // Seguridad
 
-  Serial.println("¡SEÑAL RECIBIDA! Disparando actuador...");
+  Serial.print("Pieza detectada. Esperando llegada al actuador...");
+  
+  // 1. Esperar a que la pieza llegue enfrente del actuador
+  // (El Arduino hace una pausa aquí, bloqueando, ideal para proyectos sencillos)
+  delay(tiempoEspera);
 
-  // 1. Asegurar apagado
-  apagarReles();
+  // 2. Activar Pistón (LOW = ON)
+  digitalWrite(pinRelay, LOW);
+  Serial.println("¡DISPARO!");
   
-  // 2. ACTIVAR EL RELÉ 1 (Pin 12)
-  // LOW = ENCENDIDO
-  digitalWrite(RELAY_VERDE, LOW); 
+  // 3. Mantener extendido
+  delay(TIEMPO_EMPUJE);
   
-  // 3. Esperar 1 segundo
-  delay(1000); 
-  
-  // 4. Apagar
-  apagarReles(); 
-  Serial.println("Disparo terminado.");
+  // 4. Retraer
+  digitalWrite(pinRelay, HIGH);
 }
 
 void iniciarSistema() {
   systemEnabled = true;
-  motorForward();
+  digitalWrite(MOTOR_IN1, HIGH);
+  digitalWrite(MOTOR_IN2, LOW);
 }
 
 void detenerSistema() {
   systemEnabled = false;
-  motorStop();
+  digitalWrite(MOTOR_IN1, LOW);
+  digitalWrite(MOTOR_IN2, LOW);
   apagarReles();
 }
 
-// =====================================================
-//           SETUP
-// =====================================================
 void setup() {
   Serial.begin(115200); 
   
   pinMode(MOTOR_IN1, OUTPUT);
   pinMode(MOTOR_IN2, OUTPUT);
-  pinMode(RELAY_VERDE, OUTPUT);
-  pinMode(RELAY_NARANJA, OUTPUT);
+  pinMode(ACTUADOR_1, OUTPUT);
+  pinMode(ACTUADOR_2, OUTPUT);
   pinMode(BTN_START, INPUT_PULLUP);
   pinMode(BTN_STOP, INPUT_PULLUP);
 
-  // Estado inicial: Todo apagado (HIGH)
   apagarReles();
-  motorStop();
+  digitalWrite(MOTOR_IN1, LOW); 
+  digitalWrite(MOTOR_IN2, LOW);
   
-  Serial.println("MODO PRUEBA LISTO: Cualquier detección activa el pistón.");
+  Serial.println("SISTEMA LISTO. Esperando comandos 1 o 2.");
 }
 
-// =====================================================
-//           LOOP
-// =====================================================
 void loop() {
-  // 1. BOTONES
-  if (digitalRead(BTN_STOP) == LOW) {
-    detenerSistema();
-    delay(300); 
-  }
+  // Botones Manuales
+  if (digitalRead(BTN_STOP) == LOW) { detenerSistema(); delay(300); }
+  if (digitalRead(BTN_START) == LOW) { iniciarSistema(); delay(300); }
 
-  if (digitalRead(BTN_START) == LOW) {
-    iniciarSistema();
-    delay(300); 
-  }
-
-  // 2. ESCUCHAR A PYTHON
+  // Lectura Serial desde Python
   if (Serial.available() > 0) {
     char cmd = Serial.read();
 
-    // Comandos de Control
     if (cmd == 'S') iniciarSistema();
     if (cmd == 'P') detenerSistema();
 
-    // COMANDOS DE DETECCIÓN (SIMPLIFICADO)
-    // Si llega CUALQUIERA de estos, disparamos el mismo pistón
-    if (cmd == '1' || cmd == '2' || cmd == '3') {
-      disparoPrueba();
+    // --- LÓGICA DE CLASIFICACIÓN ---
+    if (cmd == '1') {
+      // PIEZA NARANJA -> Actuador 1
+      activarPiston(ACTUADOR_1, TIEMPO_VIAJE_ACTUADOR_1);
+    }
+    else if (cmd == '2') {
+      // PIEZA VERDE -> Actuador 2
+      activarPiston(ACTUADOR_2, TIEMPO_VIAJE_ACTUADOR_2);
+    }
+    else if (cmd == '3') {
+      // PIEZA AZUL -> No hacemos nada
+      Serial.println("Pieza AZUL: Dejando pasar...");
     }
   }
 }
