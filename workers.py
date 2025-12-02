@@ -49,7 +49,7 @@ class VisionWorker(QThread):
             if ret:
                 frame = cv2.resize(frame, (640, 480))
 
-                # Dibujar línea de disparo (Referencia visual) [cite: 6]
+                # Dibujar línea de disparo (Referencia visual)
                 cv2.line(frame, (self.trigger_line_x, 0), (self.trigger_line_x, 480), (0, 0, 255), 2)
                 hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
@@ -65,7 +65,6 @@ class VisionWorker(QThread):
                     for cnt in contours:
                         area = cv2.contourArea(cnt)
                         # Filtrar objetos muy pequeños
-                        
                         if area > 1500:
                             x, y, w, h = cv2.boundingRect(cnt)
                             cx = x + w // 2
@@ -83,7 +82,7 @@ class VisionWorker(QThread):
                             # Verificar si el centro del objeto (cx) cruza la línea de disparo
                             if (
                                     self.trigger_line_x - self.trigger_offset < cx < self.trigger_line_x + self.trigger_offset) and \
-                                    (time.time() - last_trigger_time > 1.5):  # [cite: 12]
+                                    (time.time() - last_trigger_time > 1.5):
                                 zone = 0
 
                                 if color_name == "NARANJA":
@@ -97,7 +96,7 @@ class VisionWorker(QThread):
 
                                 # Emitir señal a Main para que envíe el comando serial
                                 
-                                self.detected_signal.emit(color_name, h, zone)  # [cite: 17]
+                                self.detected_signal.emit(color_name, h, zone)
 
                                 last_trigger_time = time.time()
 
@@ -132,7 +131,7 @@ class SerialController(QThread):
         try:
             self.serial_conn = serial.Serial(self.port, self.baudrate, timeout=1)
             
-            print(f"✅ Arduino conectado en {self.port}")  # [cite: 19-20]
+            print(f"✅ Arduino conectado en {self.port}")
             time.sleep(2)
         except Exception as e:
             print(f"❌ Error Arduino: {e}")
